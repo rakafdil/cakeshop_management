@@ -1,0 +1,27 @@
+{
+  "name": "@bakery/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "seed": "bun run src/scripts/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "biome check"
+  },
+  "dependencies": {
+    "@bakery/database": "workspace:*",
+    "@bakery/shared-schemas": "workspace:*",
+    "@hono/zod-validator": "^0.9.0",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.32",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.2",
+    "@types/bun": "latest",
+    "typescript": "~6.0.2"
+  }
+}

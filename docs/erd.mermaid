@@ -1,0 +1,382 @@
+erDiagram
+
+    USER {
+        uuid id PK
+        varchar name
+        varchar email UK
+        varchar password_hash
+        enum role
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CUSTOMER {
+        uuid id PK
+        varchar name
+        varchar email
+        varchar phone
+        text address
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PRODUCT {
+        uuid id PK
+        varchar name
+        text description
+        enum production_type
+        enum fulfillment_type
+        enum market_segment
+        decimal base_price
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PRODUCT_CATEGORY {
+        uuid id PK
+        varchar name
+        text description
+    }
+
+    PRODUCT_CATEGORY_MAP {
+        uuid product_id FK
+        uuid category_id FK
+    }
+
+    RECIPE {
+        uuid id PK
+        uuid product_id FK
+        varchar version
+        text preparation_steps
+        int difficulty_level
+        boolean is_complete
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    RECIPE_INGREDIENT {
+        uuid id PK
+        uuid recipe_id FK
+        uuid ingredient_id FK
+        decimal quantity
+        uuid uom_id FK
+        text notes
+    }
+
+    INGREDIENT {
+        uuid id PK
+        varchar name
+        uuid purchase_uom_id FK
+        decimal current_stock
+        decimal minimum_stock
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    INGREDIENT_PRICE_HISTORY {
+        uuid id PK
+        uuid ingredient_id FK
+        decimal price
+        decimal previous_price
+        timestamp changed_at
+    }
+
+    UOM {
+        uuid id PK
+        varchar name
+        varchar symbol
+        varchar type
+    }
+
+    UOM_CONVERSION {
+        uuid id PK
+        uuid from_uom_id FK
+        uuid to_uom_id FK
+        decimal conversion_factor
+    }
+
+    RECIPE_TOOL {
+        uuid id PK
+        uuid recipe_id FK
+        uuid tool_id FK
+        int quantity
+    }
+
+    TOOL {
+        uuid id PK
+        varchar name
+        decimal purchase_cost
+        decimal useful_life
+        decimal cost_per_use
+    }
+
+    RECIPE_IMAGE {
+        uuid id PK
+        uuid recipe_id FK
+        text image_url
+        varchar caption
+    }
+
+    PRODUCTION {
+        uuid id PK
+        uuid product_id FK
+        uuid recipe_id FK
+        decimal quantity
+        enum status
+        date production_date
+        timestamp created_at
+    }
+
+    STOCK_TRANSACTION {
+        uuid id PK
+        uuid ingredient_id FK
+        enum transaction_type
+        decimal quantity
+        decimal stock_before
+        decimal stock_after
+        uuid production_id FK
+        uuid order_id FK
+        timestamp created_at
+    }
+
+    STOCK_ALERT {
+        uuid id PK
+        uuid ingredient_id FK
+        decimal stock_level
+        decimal threshold
+        boolean is_resolved
+        timestamp created_at
+    }
+
+    CUSTOMER_ORDER {
+        uuid id PK
+        uuid customer_id FK
+        varchar order_number UK
+        varchar source_channel
+        enum status
+        date fulfillment_date
+        time fulfillment_time
+        text delivery_address
+        decimal subtotal
+        decimal total
+        varchar tracking_token UK
+        uuid pricelist_snapshot_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    ORDER_ITEM {
+        uuid id PK
+        uuid order_id FK
+        uuid product_id FK
+        decimal quantity
+        decimal unit_price
+        decimal subtotal
+        text customization
+    }
+
+    ORDER_STATUS_HISTORY {
+        uuid id PK
+        uuid order_id FK
+        enum old_status
+        enum new_status
+        timestamp changed_at
+        uuid changed_by FK
+    }
+
+    PRICE_LIST_SNAPSHOT {
+        uuid id PK
+        varchar version
+        json snapshot_data
+        timestamp created_at
+    }
+
+    ORDER_REVIEW {
+        uuid id PK
+        uuid order_id FK
+        varchar reason
+        enum status
+        uuid reviewed_by FK
+        timestamp reviewed_at
+        text notes
+    }
+
+    ORDER_REMINDER {
+        uuid id PK
+        uuid order_id FK
+        int reminder_number
+        varchar channel
+        timestamp scheduled_at
+        timestamp sent_at
+        enum status
+    }
+
+    PRODUCTION_SLOT {
+        uuid id PK
+        date slot_date
+        time start_time
+        time end_time
+        int capacity
+        int reserved_capacity
+        boolean is_available
+    }
+
+    ORDER_PRODUCTION_SLOT {
+        uuid order_id FK
+        uuid production_slot_id FK
+    }
+
+    PAYMENT {
+        uuid id PK
+        uuid order_id FK
+        decimal amount
+        varchar payment_method
+        text proof_url
+        enum status
+        timestamp paid_at
+        timestamp created_at
+    }
+
+    FINANCIAL_TRANSACTION {
+        uuid id PK
+        uuid order_id FK
+        enum type
+        varchar category
+        decimal amount
+        date transaction_date
+        text description
+        timestamp created_at
+    }
+
+    PRODUCT_COST {
+        uuid id PK
+        uuid product_id FK
+        decimal material_cost
+        decimal labor_cost
+        decimal tool_depreciation
+        decimal complexity_multiplier
+        decimal risk_buffer_percentage
+        decimal hpp
+        timestamp calculated_at
+    }
+
+    PRICING_RULE {
+        uuid id PK
+        decimal target_margin_percentage
+        timestamp updated_at
+    }
+
+    PRODUCT_PRICE {
+        uuid id PK
+        uuid product_id FK
+        decimal hpp
+        decimal target_margin
+        decimal recommended_price
+        timestamp calculated_at
+    }
+
+    SALES_FORECAST {
+        uuid id PK
+        uuid product_id FK
+        date forecast_date
+        decimal recommended_quantity
+        decimal confidence_score
+        varchar method
+        timestamp created_at
+    }
+
+    CONTENT {
+        uuid id PK
+        varchar title
+        text content
+        varchar platform
+        enum status
+        date scheduled_date
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    VALUE_PROPOSITION_TEMPLATE {
+        uuid id PK
+        varchar title
+        text content
+        boolean is_active
+        timestamp created_at
+    }
+
+    PRODUCT_VALUE_PROPOSITION {
+        uuid product_id FK
+        uuid template_id FK
+    }
+
+    PORTFOLIO {
+        uuid id PK
+        uuid product_id FK
+        text description
+        text image_url
+        date work_date
+        timestamp created_at
+    }
+
+
+    USER ||--o{ ORDER_STATUS_HISTORY : changes
+
+    CUSTOMER ||--o{ CUSTOMER_ORDER : places
+    CUSTOMER_ORDER ||--|{ ORDER_ITEM : contains
+    PRODUCT ||--o{ ORDER_ITEM : ordered
+
+    PRODUCT_CATEGORY ||--o{ PRODUCT_CATEGORY_MAP : classifies
+    PRODUCT ||--o{ PRODUCT_CATEGORY_MAP : belongs_to
+
+    PRODUCT ||--o{ RECIPE : has
+    RECIPE ||--|{ RECIPE_INGREDIENT : contains
+    INGREDIENT ||--o{ RECIPE_INGREDIENT : used_in
+
+    UOM ||--o{ RECIPE_INGREDIENT : measures
+    UOM ||--o{ INGREDIENT : purchase_unit
+
+    UOM ||--o{ UOM_CONVERSION : source
+    UOM ||--o{ UOM_CONVERSION : target
+
+    RECIPE ||--o{ RECIPE_TOOL : requires
+    TOOL ||--o{ RECIPE_TOOL : used_by
+
+    RECIPE ||--o{ RECIPE_IMAGE : has
+
+    INGREDIENT ||--o{ INGREDIENT_PRICE_HISTORY : has
+
+    PRODUCT ||--o{ PRODUCTION : produced
+    RECIPE ||--o{ PRODUCTION : based_on
+
+    INGREDIENT ||--o{ STOCK_TRANSACTION : has
+    PRODUCTION ||--o{ STOCK_TRANSACTION : consumes
+    CUSTOMER_ORDER ||--o{ STOCK_TRANSACTION : consumes
+
+    INGREDIENT ||--o{ STOCK_ALERT : triggers
+
+    CUSTOMER_ORDER ||--o{ ORDER_STATUS_HISTORY : has
+    CUSTOMER_ORDER ||--o{ ORDER_REVIEW : may_require
+    CUSTOMER_ORDER ||--o{ ORDER_REMINDER : receives
+
+    PRICE_LIST_SNAPSHOT ||--o{ CUSTOMER_ORDER : used_by
+
+    CUSTOMER_ORDER ||--o{ PAYMENT : has
+    CUSTOMER_ORDER ||--o{ FINANCIAL_TRANSACTION : generates
+
+    PRODUCT ||--o{ PRODUCT_COST : has
+    PRODUCT ||--o{ PRODUCT_PRICE : has
+    PRICING_RULE ||--o{ PRODUCT_PRICE : determines
+
+    PRODUCT ||--o{ SALES_FORECAST : forecasted
+
+    CUSTOMER_ORDER }o--o| PRODUCTION_SLOT : scheduled_for
+    PRODUCTION_SLOT ||--o{ ORDER_PRODUCTION_SLOT : contains
+    CUSTOMER_ORDER ||--o| ORDER_PRODUCTION_SLOT : reserves
+
+    PRODUCT ||--o{ PRODUCT_VALUE_PROPOSITION : uses
+    VALUE_PROPOSITION_TEMPLATE ||--o{ PRODUCT_VALUE_PROPOSITION : attached_to
+
+    PRODUCT ||--o{ PORTFOLIO : showcased

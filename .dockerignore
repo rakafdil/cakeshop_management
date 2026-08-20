@@ -1,0 +1,19 @@
+# ignore node_modules & build artifacts
+node_modules
+**/node_modules
+
+# next build output
+apps/web/.next
+.next
+
+# turbo cache
+.turbo
+
+# env files (build takes them from environment / secret)
+.env
+apps/api/.env
+packages/database/.env
+
+# git
+.git
+.gitignore

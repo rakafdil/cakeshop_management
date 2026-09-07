@@ -1,4 +1,5 @@
-import { Hono } from 'hono';
+import { OpenAPIHono } from '@hono/zod-openapi';
+import { swaggerUI } from '@hono/swagger-ui';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
@@ -51,7 +52,23 @@ import {
 import { contentRoutes, valuePropositionRoutes, portfolioRoutes } from './modules/marketing/routes';
 import { dashboardRoutes } from './modules/dashboard/routes';
 
-export const app = new Hono<AppEnv>();
+import { ApiError } from './lib/errors';
+
+export const app = new OpenAPIHono<AppEnv>({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+      throw new ApiError(
+        400,
+        'VALIDATION_ERROR',
+        'Validasi gagal',
+        result.error.issues.map((i) => ({
+          path: i.path.join('.'),
+          message: i.message,
+        })),
+      );
+    }
+  },
+});
 
 // --- middleware global ---
 app.use('*', logger());
@@ -75,6 +92,16 @@ app.use('/api/*', csrf({ exempt: (c) => c.req.path.startsWith('/api/auth') }));
 app.get('/api/health', (c) =>
   c.json({ status: 'ok', service: 'cakeshop-api', time: new Date().toISOString() }),
 );
+
+// --- openapi ---
+app.doc('/api/swagger', {
+  openapi: '3.0.0',
+  info: {
+    version: '1.0.0',
+    title: 'Cakeshop API',
+  },
+});
+app.get('/api/docs', swaggerUI({ url: '/api/swagger' }));
 
 // --- modul routing ---
 app.route('/api/auth', authRoutes);

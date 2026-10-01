@@ -1,3 +1,4 @@
+```mermaid
 erDiagram
 
     USER {
@@ -25,7 +26,7 @@ erDiagram
         uuid id PK
         varchar name
         text description
-        enum production_type
+        enum production_type "custom_decor | regular_batch — drives pricing model & form branching"
         enum fulfillment_type
         enum market_segment
         decimal base_price
@@ -160,8 +161,10 @@ erDiagram
         date fulfillment_date
         time fulfillment_time
         text delivery_address
+        decimal quoted_total "initial price offered, before negotiation"
         decimal subtotal
-        decimal total
+        decimal total "final agreed price — pricing model ground truth"
+        enum negotiation_status "accepted | negotiated_down | negotiated_no_change | cancelled_due_to_price"
         varchar tracking_token UK
         uuid pricelist_snapshot_id FK
         timestamp created_at
@@ -173,9 +176,14 @@ erDiagram
         uuid order_id FK
         uuid product_id FK
         decimal quantity
+        uuid uom_id FK "reuses UOM, e.g. pcs / porsi / kg / tier"
         decimal unit_price
         decimal subtotal
         text customization
+        enum decoration_type "fondant | print | buttercream | painted | none — custom items only"
+        int complexity_score "1-5, per-order override of RECIPE.difficulty_level"
+        enum size_portion "small | medium | large"
+        int tier_count "nullable, multi-tier custom cakes only"
     }
 
     ORDER_STATUS_HISTORY {
@@ -321,6 +329,18 @@ erDiagram
         timestamp created_at
     }
 
+    PRICE_RECOMMENDATION {
+        uuid id PK
+        uuid order_item_id FK
+        decimal complexity_input
+        decimal material_cost_input
+        decimal scale_input
+        decimal turnaround_input
+        decimal recommended_price
+        varchar method "e.g. fuzzy_tsukamoto_v1, cost_plus_baseline"
+        timestamp calculated_at
+    }
+
 
     USER ||--o{ ORDER_STATUS_HISTORY : changes
 
@@ -380,3 +400,7 @@ erDiagram
     VALUE_PROPOSITION_TEMPLATE ||--o{ PRODUCT_VALUE_PROPOSITION : attached_to
 
     PRODUCT ||--o{ PORTFOLIO : showcased
+
+    UOM ||--o{ ORDER_ITEM : measures
+    ORDER_ITEM ||--o{ PRICE_RECOMMENDATION : has
+```

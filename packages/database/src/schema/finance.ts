@@ -5,7 +5,7 @@ import {
   index, unique, uniqueIndex, check,
 } from 'drizzle-orm/pg-core';
 import { product } from './product';
-import { customerOrder } from './order';
+import { customerOrder, orderItem } from './order';
 import { paymentStatusEnum, financialTransactionTypeEnum } from './enums';
 
 export const payment = pgTable('payment', {
@@ -82,6 +82,27 @@ export const productPrice = pgTable('product_price', {
   check('ck_product_price_hpp', sql`${t.hpp} >= 0`),
   check('ck_product_price_margin', sql`${t.targetMargin} >= 0 AND ${t.targetMargin} < 1`),
   check('ck_product_price_recommended', sql`${t.recommendedPrice} >= 0`),
+]);
+
+// Per-order-item price recommendations, one row per model run. Distinct from
+// productPrice (a product-level baseline recalculated when costs change):
+// this captures the order-specific inputs (complexity, scale, turnaround)
+// that the same product can have different values for across orders.
+export const priceRecommendation = pgTable('price_recommendation', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orderItemId: uuid('order_item_id').notNull().references(() => orderItem.id, { onDelete: 'cascade' }),
+  complexityInput: decimal('complexity_input', { precision: 6, scale: 3 }).notNull(),
+  materialCostInput: decimal('material_cost_input', { precision: 14, scale: 2 }).notNull(),
+  scaleInput: decimal('scale_input', { precision: 14, scale: 3 }).notNull(),
+  turnaroundInput: decimal('turnaround_input', { precision: 10, scale: 2 }).notNull(),
+  recommendedPrice: decimal('recommended_price', { precision: 14, scale: 2 }).notNull(),
+  method: varchar('method', { length: 50 }).notNull(),
+  calculatedAt: timestamp('calculated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_price_recommendation_item_calculated').on(t.orderItemId, t.calculatedAt.desc()),
+  index('idx_price_recommendation_method').on(t.method),
+  check('ck_price_recommendation_material_cost', sql`${t.materialCostInput} >= 0`),
+  check('ck_price_recommendation_recommended_price', sql`${t.recommendedPrice} >= 0`),
 ]);
 
 export const salesForecast = pgTable('sales_forecast', {

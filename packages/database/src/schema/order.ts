@@ -6,7 +6,11 @@ import {
 } from 'drizzle-orm/pg-core';
 import { user, customer } from './user';
 import { product } from './product';
-import { orderStatusEnum, orderReviewStatusEnum, reminderStatusEnum, notificationStatusEnum } from './enums';
+import { uom } from './recipe';
+import {
+  orderStatusEnum, orderReviewStatusEnum, reminderStatusEnum, notificationStatusEnum,
+  negotiationStatusEnum, decorationTypeEnum, sizePortionEnum,
+} from './enums';
 
 export const priceListSnapshot = pgTable('price_list_snapshot', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -26,8 +30,10 @@ export const customerOrder = pgTable('customer_order', {
   fulfillmentDate: date('fulfillment_date'),
   fulfillmentTime: time('fulfillment_time'),
   deliveryAddress: text('delivery_address'),
+  quotedTotal: decimal('quoted_total', { precision: 14, scale: 2 }),
   subtotal: decimal('subtotal', { precision: 14, scale: 2 }).notNull().default('0'),
   total: decimal('total', { precision: 14, scale: 2 }).notNull().default('0'),
+  negotiationStatus: negotiationStatusEnum('negotiation_status'),
   trackingToken: varchar('tracking_token', { length: 64 })
     .notNull()
     .unique()
@@ -39,6 +45,8 @@ export const customerOrder = pgTable('customer_order', {
   index('idx_customer_order_customer').on(t.customerId),
   index('idx_customer_order_status').on(t.status),
   index('idx_customer_order_fulfillment_date').on(t.fulfillmentDate),
+  index('idx_customer_order_negotiation_status').on(t.negotiationStatus).where(sql`${t.negotiationStatus} IS NOT NULL`),
+  check('ck_customer_order_quoted_total', sql`${t.quotedTotal} >= 0`),
   check('ck_customer_order_subtotal', sql`${t.subtotal} >= 0`),
   check('ck_customer_order_total', sql`${t.total} >= 0`),
 ]);
@@ -48,16 +56,24 @@ export const orderItem = pgTable('order_item', {
   orderId: uuid('order_id').notNull().references(() => customerOrder.id, { onDelete: 'cascade' }),
   productId: uuid('product_id').notNull().references(() => product.id, { onDelete: 'restrict' }),
   quantity: decimal('quantity', { precision: 14, scale: 3 }).notNull(),
+  uomId: uuid('uom_id').notNull().references(() => uom.id, { onDelete: 'restrict' }),
   unitPrice: decimal('unit_price', { precision: 14, scale: 2 }).notNull(),
   subtotal: decimal('subtotal', { precision: 14, scale: 2 }).notNull(),
   statedBudget: decimal('stated_budget', { precision: 14, scale: 2 }),
   customization: text('customization'),
+  decorationType: decorationTypeEnum('decoration_type').notNull().default('none'),
+  complexityScore: integer('complexity_score'),
+  sizePortion: sizePortionEnum('size_portion'),
+  tierCount: integer('tier_count'),
 }, (t) => [
   index('idx_order_item_order').on(t.orderId),
   index('idx_order_item_product').on(t.productId),
+  index('idx_order_item_uom').on(t.uomId),
   check('ck_order_item_quantity', sql`${t.quantity} > 0`),
   check('ck_order_item_unit_price', sql`${t.unitPrice} >= 0`),
   check('ck_order_item_subtotal', sql`${t.subtotal} >= 0`),
+  check('ck_order_item_complexity_score', sql`${t.complexityScore} BETWEEN 1 AND 5`),
+  check('ck_order_item_tier_count', sql`${t.tierCount} > 0`),
 ]);
 
 export const orderStatusHistory = pgTable('order_status_history', {

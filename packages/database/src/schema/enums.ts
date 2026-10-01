@@ -18,3 +18,8 @@ export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'verified'
 export const financialTransactionTypeEnum = pgEnum('financial_transaction_type', ['income', 'expense']);
 export const contentStatusEnum = pgEnum('content_status', ['planned', 'posted', 'skipped']);
 export const notificationStatusEnum = pgEnum('notification_status', ['pending', 'sent', 'failed', 'retrying']);
+export const negotiationStatusEnum = pgEnum('negotiation_status', [
+  'accepted', 'negotiated_down', 'negotiated_no_change', 'cancelled_due_to_price',
+]);
+export const decorationTypeEnum = pgEnum('decoration_type', ['fondant', 'print', 'buttercream', 'painted', 'none']);
+export const sizePortionEnum = pgEnum('size_portion', ['small', 'medium', 'large']);

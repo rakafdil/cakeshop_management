@@ -1,6 +1,6 @@
 -- ==========================================================
 -- Bakery Business Management Platform — PostgreSQL Schema
--- Version: 2.0 (improved from initial ERD)
+-- Version: 2.1 (pricing research extension)
 --
 -- Changes vs. v1.0 ERD:
 --   - Added NOTIFICATION_LOG (order status notifications, FR-OCS-04)
@@ -13,6 +13,18 @@
 --   - Indexes on all FK columns + query-pattern-specific indexes
 --   - CHECK constraints for data integrity
 --   - Automatic updated_at triggers
+--
+-- Changes vs. v2.0 (pricing recommendation thesis support):
+--   - CUSTOMER_ORDER.quoted_total + negotiation_status (initial offer vs.
+--     final agreed price — ground truth for price-acceptance validation)
+--   - ORDER_ITEM.uom_id, decoration_type, complexity_score, size_portion,
+--     tier_count (per-order attributes; complexity can vary per order even
+--     for the same product/recipe, unlike RECIPE.difficulty_level)
+--   - Added PRICE_RECOMMENDATION (logs model inputs/output per order item,
+--     for both the fuzzy model and the existing cost-plus baseline, so the
+--     two can be evaluated against actual negotiation outcomes)
+--   - NOTE: production_type ('batch' | 'unit') already distinguishes
+--     regular-batch vs. custom/decor items — no new enum needed for that.
 -- ==========================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -38,6 +50,9 @@ CREATE TYPE payment_status AS ENUM ('pending', 'verified', 'rejected');
 CREATE TYPE financial_transaction_type AS ENUM ('income', 'expense');
 CREATE TYPE content_status AS ENUM ('planned', 'posted', 'skipped');
 CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'failed', 'retrying');
+CREATE TYPE negotiation_status AS ENUM ('accepted', 'negotiated_down', 'negotiated_no_change', 'cancelled_due_to_price');
+CREATE TYPE decoration_type AS ENUM ('fondant', 'print', 'buttercream', 'painted', 'none');
+CREATE TYPE size_portion AS ENUM ('small', 'medium', 'large');
 
 -- ==========================================================
 -- UTILITY: auto-update `updated_at` on row change
@@ -292,8 +307,10 @@ CREATE TABLE customer_order (
   fulfillment_date date,
   fulfillment_time time,
   delivery_address text,
+  quoted_total decimal(14,2) CHECK (quoted_total >= 0), -- initial price offered, before negotiation
   subtotal decimal(14,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
-  total decimal(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
+  total decimal(14,2) NOT NULL DEFAULT 0 CHECK (total >= 0), -- final agreed price: pricing model ground truth
+  negotiation_status negotiation_status, -- set once price is settled; null while still in negotiation
   tracking_token varchar(64) NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
   pricelist_snapshot_id uuid REFERENCES price_list_snapshot (id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -302,6 +319,7 @@ CREATE TABLE customer_order (
 CREATE INDEX idx_customer_order_customer ON customer_order (customer_id);
 CREATE INDEX idx_customer_order_status ON customer_order (status);
 CREATE INDEX idx_customer_order_fulfillment_date ON customer_order (fulfillment_date);
+CREATE INDEX idx_customer_order_negotiation_status ON customer_order (negotiation_status) WHERE negotiation_status IS NOT NULL;
 -- tracking_token already has a UNIQUE constraint -> indexed automatically
 CREATE TRIGGER trg_customer_order_updated_at BEFORE UPDATE ON customer_order
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -316,13 +334,19 @@ CREATE TABLE order_item (
   order_id uuid NOT NULL REFERENCES customer_order (id) ON DELETE CASCADE,
   product_id uuid NOT NULL REFERENCES product (id) ON DELETE RESTRICT,
   quantity decimal(14,3) NOT NULL CHECK (quantity > 0),
+  uom_id uuid NOT NULL REFERENCES uom (id) ON DELETE RESTRICT,
   unit_price decimal(14,2) NOT NULL CHECK (unit_price >= 0),
   subtotal decimal(14,2) NOT NULL CHECK (subtotal >= 0),
   stated_budget decimal(14,2), -- customer's declared budget, for screening (FR-OCS-06)
-  customization text
+  customization text,
+  decoration_type decoration_type NOT NULL DEFAULT 'none', -- meaningful for product_type = 'unit'
+  complexity_score int CHECK (complexity_score BETWEEN 1 AND 5), -- per-order override of recipe.difficulty_level
+  size_portion size_portion,
+  tier_count int CHECK (tier_count > 0) -- nullable; multi-tier custom cakes only
 );
 CREATE INDEX idx_order_item_order ON order_item (order_id);
 CREATE INDEX idx_order_item_product ON order_item (product_id);
+CREATE INDEX idx_order_item_uom ON order_item (uom_id);
 
 CREATE TABLE order_status_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -447,6 +471,24 @@ CREATE TABLE product_price (
   calculated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_product_price_product_calculated ON product_price (product_id, calculated_at DESC);
+
+-- Per-order-item price recommendations, one row per model run. Distinct from
+-- PRODUCT_PRICE (a product-level baseline recalculated when costs change):
+-- this captures the order-specific inputs (complexity, scale, turnaround)
+-- that the same product can have different values for across orders.
+CREATE TABLE price_recommendation (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_item_id uuid NOT NULL REFERENCES order_item (id) ON DELETE CASCADE,
+  complexity_input decimal(6,3) NOT NULL,
+  material_cost_input decimal(14,2) NOT NULL CHECK (material_cost_input >= 0),
+  scale_input decimal(14,3) NOT NULL,
+  turnaround_input decimal(10,2) NOT NULL, -- e.g. hours or days until fulfillment_date
+  recommended_price decimal(14,2) NOT NULL CHECK (recommended_price >= 0),
+  method varchar(50) NOT NULL, -- e.g. 'fuzzy_tsukamoto_v1', 'cost_plus_baseline'
+  calculated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_price_recommendation_item_calculated ON price_recommendation (order_item_id, calculated_at DESC);
+CREATE INDEX idx_price_recommendation_method ON price_recommendation (method);
 
 CREATE TABLE sales_forecast (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

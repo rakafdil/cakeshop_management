@@ -42,6 +42,18 @@ export function evaluateScreeningRule(item: {
 	quantity: number;
 }): { requiresReview: boolean; reason?: string } {
 	if (item.statedBudget != null) {
+		// Fondant-specific rule takes priority: flag when budget is below unit price
+		if (
+			item.decorationType === "fondant" &&
+			item.statedBudget < item.unitPrice
+		) {
+			return {
+				requiresReview: true,
+				reason: `Fondant decoration: budget stated (${item.statedBudget}) is below unit price (${item.unitPrice})`,
+			};
+		}
+
+		// General rule: flag when budget is below total estimated price
 		const estimatedPrice = item.unitPrice * item.quantity;
 		if (item.statedBudget < estimatedPrice) {
 			return {

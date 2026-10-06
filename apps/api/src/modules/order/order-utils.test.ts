@@ -25,7 +25,7 @@ describe("Order Utilities", () => {
 
 			// Given 16-bit entropy (65,536 combinations), at least 2 of 3 will almost certainly be distinct
 			const set = new Set([num1, num2, num3]);
-			expect(set.size).toBeGreaterThanOrEqual(2);
+			expect(set.size).toBe(3);
 		});
 	});
 
@@ -61,7 +61,7 @@ describe("Order Utilities", () => {
 	describe("evaluateScreeningRule", () => {
 		test("flags order item for review if statedBudget is below estimated price", () => {
 			const check1 = evaluateScreeningRule({
-				decorationType: "fondant",
+				decorationType: "none",
 				statedBudget: 150000,
 				unitPrice: 250000,
 				quantity: 1,
@@ -111,6 +111,23 @@ describe("Order Utilities", () => {
 			});
 			expect(check.requiresReview).toBe(false);
 			expect(check.reason).toBeUndefined();
+		});
+
+		test("fondant-specific rule produces distinct reason when budget is below unit price", () => {
+			// statedBudget (180000) < unitPrice (200000) -- fondant rule fires with distinct reason
+			// statedBudget (180000) < unitPrice*quantity (400000) -- general rule would also fire
+			// fondant rule takes priority, reason must mention "unit price" not "estimated price"
+			const check = evaluateScreeningRule({
+				decorationType: "fondant",
+				statedBudget: 180000,
+				unitPrice: 200000,
+				quantity: 2,
+			});
+			expect(check.requiresReview).toBe(true);
+			expect(check.reason).toContain(
+				"Fondant decoration: budget stated (180000) is below unit price (200000)",
+			);
+			expect(check.reason).not.toContain("estimated price");
 		});
 	});
 });

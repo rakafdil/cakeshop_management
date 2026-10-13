@@ -11,7 +11,9 @@ import { authenticate, type AppEnv } from '../../middleware/auth';
 import {
   createOrderWithItems,
   getOrderById,
+  getOrderStatusHistory,
   listOrders,
+  updateOrderStatus,
 } from './services';
 
 // Order & fulfillment: order beserta sub-resourcenya (items, status history, review,
@@ -23,6 +25,20 @@ const listOrderQuerySchema = z.object({
   status: z.string().optional(),
   sourceChannel: z.string().optional(),
   customerId: z.string().optional(),
+});
+
+const updateOrderStatusSchema = z.object({
+  status: z.enum([
+    'received',
+    'confirmed',
+    'requires_review',
+    'in_production',
+    'ready',
+    'out_for_delivery',
+    'completed',
+    'cancelled_no_response',
+    'cancelled_other',
+  ]),
 });
 
 export const orderRoutes = new Hono<AppEnv>();
@@ -48,6 +64,26 @@ orderRoutes.get('/:id', zValid('param', idParamSchema), async (c) => {
   return c.json({ data: order }, 200);
 });
 
+orderRoutes.patch(
+  '/:id/status',
+  zValid('param', idParamSchema),
+  zValid('json', updateOrderStatusSchema),
+  async (c) => {
+    const { id } = idParamSchema.parse(c.req.param());
+    const raw = await c.req.json();
+    const { status } = updateOrderStatusSchema.parse(raw);
+    const userId = c.get('account')?.id ?? c.get('user')?.sub;
+    const updated = await updateOrderStatus(id, status, userId);
+    return c.json({ data: updated }, 200);
+  },
+);
+
+orderRoutes.get('/:id/status-history', zValid('param', idParamSchema), async (c) => {
+  const { id } = idParamSchema.parse(c.req.param());
+  const history = await getOrderStatusHistory(id);
+  return c.json({ data: history }, 200);
+});
+
 // --- sub-resource order ---
 
 export const orderItemRoutes = new Hono<AppEnv>();
@@ -67,8 +103,11 @@ orderStatusHistoryRoutes.use('*', authenticate);
 orderStatusHistoryRoutes.get(
   '/:id/status-history',
   zValid('param', idParamSchema),
-  zValid('query', paginationSchema),
-  (c) => unimplemented('order status history belum diimplementasikan'),
+  async (c) => {
+    const { id } = idParamSchema.parse(c.req.param());
+    const history = await getOrderStatusHistory(id);
+    return c.json({ data: history }, 200);
+  },
 );
 
 export const orderReviewRoutes = new Hono<AppEnv>();

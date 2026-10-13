@@ -7,6 +7,7 @@ import {
   orderStatusHistory,
   product,
   uom,
+  user,
 } from '@bakery/database/schema';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { CreateOrderWithCustomerInput } from '@bakery/shared-schemas';
@@ -292,3 +293,110 @@ export async function listOrders(query: ListOrdersQuery = {}) {
     },
   };
 }
+
+export const VALID_ORDER_STATUSES = [
+  'received',
+  'confirmed',
+  'requires_review',
+  'in_production',
+  'ready',
+  'out_for_delivery',
+  'completed',
+  'cancelled_no_response',
+  'cancelled_other',
+] as const;
+
+export type ValidOrderStatus = (typeof VALID_ORDER_STATUSES)[number];
+
+/**
+ * Updates an order's status and logs the transition in order_status_history.
+ * Enforces business logic such as approval requirement from requires_review to in_production.
+ */
+export async function updateOrderStatus(
+  orderId: string,
+  newStatus: string,
+  changedByUserId?: string,
+) {
+  if (!VALID_ORDER_STATUSES.includes(newStatus as ValidOrderStatus)) {
+    throw badRequest('Status order tidak valid');
+  }
+
+  return await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select()
+      .from(customerOrder)
+      .where(eq(customerOrder.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      throw notFound('Order tidak ditemukan');
+    }
+
+    const oldStatus = order.status;
+
+    if (oldStatus === 'requires_review' && newStatus === 'in_production') {
+      throw badRequest('Order requires review approval before production');
+    }
+
+    const [updatedOrder] = await tx
+      .update(customerOrder)
+      .set({
+        status: newStatus as ValidOrderStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(customerOrder.id, orderId))
+      .returning();
+
+    await tx.insert(orderStatusHistory).values({
+      orderId,
+      oldStatus,
+      newStatus: newStatus as ValidOrderStatus,
+      changedBy: changedByUserId || null,
+    });
+
+    return updatedOrder;
+  });
+}
+
+/**
+ * Retrieves the status transition history for an order, ordered chronologically descending,
+ * joined with user details if available.
+ */
+export async function getOrderStatusHistory(orderId: string) {
+  const [order] = await db
+    .select({ id: customerOrder.id })
+    .from(customerOrder)
+    .where(eq(customerOrder.id, orderId))
+    .limit(1);
+
+  if (!order) {
+    throw notFound('Order tidak ditemukan');
+  }
+
+  const rows = await db
+    .select({
+      id: orderStatusHistory.id,
+      orderId: orderStatusHistory.orderId,
+      oldStatus: orderStatusHistory.oldStatus,
+      newStatus: orderStatusHistory.newStatus,
+      changedAt: orderStatusHistory.changedAt,
+      changedBy: orderStatusHistory.changedBy,
+      userName: user.name,
+      userEmail: user.email,
+    })
+    .from(orderStatusHistory)
+    .leftJoin(user, eq(orderStatusHistory.changedBy, user.id))
+    .where(eq(orderStatusHistory.orderId, orderId))
+    .orderBy(desc(orderStatusHistory.changedAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    orderId: r.orderId,
+    oldStatus: r.oldStatus,
+    newStatus: r.newStatus,
+    changedAt: r.changedAt,
+    changedBy: r.changedBy,
+    user: r.changedBy && r.userName ? { name: r.userName, email: r.userEmail } : null,
+  }));
+}
+

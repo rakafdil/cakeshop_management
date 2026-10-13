@@ -1,14 +1,52 @@
 import { Hono } from 'hono';
-import { idParamSchema, paginationSchema } from '@bakery/shared-schemas';
-import { crud } from '../../lib/crud';
+import { z } from 'zod';
+import {
+  CreateOrderWithCustomerInputSchema,
+  idParamSchema,
+  paginationSchema,
+} from '@bakery/shared-schemas';
 import { unimplemented } from '../../lib/errors';
 import { zValid } from '../../lib/validators';
 import { authenticate, type AppEnv } from '../../middleware/auth';
+import {
+  createOrderWithItems,
+  getOrderById,
+  listOrders,
+} from './services';
 
 // Order & fulfillment: order beserta sub-resourcenya (items, status history, review,
 // reminder, payment, slot produksi).
 
-export const orderRoutes = crud('orders', authenticate);
+const listOrderQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.string().optional(),
+  sourceChannel: z.string().optional(),
+  customerId: z.string().optional(),
+});
+
+export const orderRoutes = new Hono<AppEnv>();
+orderRoutes.use('*', authenticate);
+
+orderRoutes.post('/', zValid('json', CreateOrderWithCustomerInputSchema), async (c) => {
+  const raw = await c.req.json();
+  const body = CreateOrderWithCustomerInputSchema.parse(raw);
+  const userId = c.get('account')?.id ?? c.get('user')?.sub;
+  const createdOrder = await createOrderWithItems(body, userId);
+  return c.json({ data: createdOrder }, 201);
+});
+
+orderRoutes.get('/', zValid('query', listOrderQuerySchema), async (c) => {
+  const query = listOrderQuerySchema.parse(c.req.query());
+  const result = await listOrders(query);
+  return c.json(result, 200);
+});
+
+orderRoutes.get('/:id', zValid('param', idParamSchema), async (c) => {
+  const { id } = idParamSchema.parse(c.req.param());
+  const order = await getOrderById(id);
+  return c.json({ data: order }, 200);
+});
 
 // --- sub-resource order ---
 

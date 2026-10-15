@@ -5,6 +5,7 @@ import {
   orderItem,
   orderReview,
   orderStatusHistory,
+  payment,
   product,
   uom,
   user,
@@ -400,3 +401,78 @@ export async function getOrderStatusHistory(orderId: string) {
   }));
 }
 
+export interface RecordPaymentInput {
+  amount: number;
+  paymentMethod: string;
+  proofUrl?: string;
+  status?: 'pending' | 'verified' | 'rejected';
+}
+
+/**
+ * Records a payment (DP or full) against an order.
+ */
+export async function recordOrderPayment(
+  orderId: string,
+  data: RecordPaymentInput,
+) {
+  // Verify order exists
+  const [order] = await db
+    .select({ id: customerOrder.id })
+    .from(customerOrder)
+    .where(eq(customerOrder.id, orderId))
+    .limit(1);
+  if (!order) {
+    throw notFound('Order tidak ditemukan');
+  }
+
+  const status = data.status ?? 'verified';
+  const paidAt = status === 'verified' ? new Date() : null;
+
+  const [newPayment] = await db
+    .insert(payment)
+    .values({
+      orderId,
+      amount: data.amount.toFixed(2),
+      paymentMethod: data.paymentMethod,
+      proofUrl: data.proofUrl ?? null,
+      status,
+      paidAt,
+    })
+    .returning();
+
+  return newPayment;
+}
+
+/**
+ * Returns all payments for an order together with a balance summary.
+ */
+export async function getOrderPaymentsSummary(orderId: string) {
+  // Verify order exists
+  const [order] = await db
+    .select({ id: customerOrder.id, total: customerOrder.total })
+    .from(customerOrder)
+    .where(eq(customerOrder.id, orderId))
+    .limit(1);
+  if (!order) {
+    throw notFound('Order tidak ditemukan');
+  }
+
+  const payments = await db
+    .select()
+    .from(payment)
+    .where(eq(payment.orderId, orderId))
+    .orderBy(desc(payment.createdAt));
+
+  const totalOrder = Number(order.total);
+  const totalPaid = Math.round(
+    payments
+      .filter((p) => p.status === 'verified')
+      .reduce((acc, p) => acc + Number(p.amount), 0) * 100,
+  ) / 100;
+  const balanceDue = Math.max(0, Math.round((totalOrder - totalPaid) * 100) / 100);
+
+  return {
+    data: payments,
+    summary: { totalOrder, totalPaid, balanceDue },
+  };
+}

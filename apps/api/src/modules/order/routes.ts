@@ -11,8 +11,10 @@ import { authenticate, type AppEnv } from '../../middleware/auth';
 import {
   createOrderWithItems,
   getOrderById,
+  getOrderPaymentsSummary,
   getOrderStatusHistory,
   listOrders,
+  recordOrderPayment,
   updateOrderStatus,
 } from './services';
 
@@ -132,15 +134,34 @@ orderReminderRoutes.post('/:id/reminders', zValid('param', idParamSchema), (c) =
   unimplemented('schedule order reminder belum diimplementasikan'),
 );
 
+const paymentBodySchema = z.object({
+  amount: z.number().positive({ message: 'Amount harus lebih dari 0' }),
+  paymentMethod: z.string().min(1),
+  proofUrl: z.string().optional(),
+  status: z.enum(['pending', 'verified', 'rejected']).optional(),
+});
+
 export const orderPaymentRoutes = new Hono<AppEnv>();
 orderPaymentRoutes.use('*', authenticate);
 orderPaymentRoutes.get(
   '/:id/payments',
   zValid('param', idParamSchema),
-  (c) => unimplemented('order payments belum diimplementasikan'),
+  async (c) => {
+    const { id } = idParamSchema.parse(c.req.param());
+    const result = await getOrderPaymentsSummary(id);
+    return c.json(result, 200);
+  },
 );
-orderPaymentRoutes.post('/:id/payments', zValid('param', idParamSchema), (c) =>
-  unimplemented('create order payment belum diimplementasikan'),
+orderPaymentRoutes.post(
+  '/:id/payments',
+  zValid('param', idParamSchema),
+  zValid('json', paymentBodySchema),
+  async (c) => {
+    const { id } = idParamSchema.parse(c.req.param());
+    const body = paymentBodySchema.parse(await c.req.json());
+    const newPayment = await recordOrderPayment(id, body);
+    return c.json({ data: newPayment }, 201);
+  },
 );
 
 export const orderProductionSlotRoutes = new Hono<AppEnv>();

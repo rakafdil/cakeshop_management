@@ -1,20 +1,20 @@
 // apps/api/src/lib/crud.ts
-import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import { Hono } from 'hono';
-import type { MiddlewareHandler } from 'hono';
-import { db } from '@bakery/database';
-import { eq, sql } from 'drizzle-orm';
-import type { PgTable, PgColumn } from 'drizzle-orm/pg-core';
-import { idParamSchema, paginationSchema } from '@bakery/shared-schemas';
-import { notFound } from './errors';
-import { unimplemented } from './errors';
-import type { AppEnv } from '../middleware/auth';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
+import { db } from "@bakery/database";
+import { eq, sql } from "drizzle-orm";
+import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
+import { idParamSchema, paginationSchema } from "@bakery/shared-schemas";
+import { notFound } from "./errors";
+import { unimplemented } from "./errors";
+import type { AppEnv } from "../middleware/auth";
 
 /** Legacy module routes remain registered as explicit 501 stubs until their tables are wired. */
 export function crud(label: string, middleware: MiddlewareHandler<AppEnv>) {
   const router = new Hono<AppEnv>();
-  router.use('*', middleware);
-  router.all('*', () => unimplemented(`${label} belum diimplementasikan`));
+  router.use("*", middleware);
+  router.all("*", () => unimplemented(`${label} belum diimplementasikan`));
   return router;
 }
 
@@ -54,31 +54,35 @@ export function autoCrud<TTable extends PgTable>(options: CrudOptions<TTable>) {
     : undefined;
 
   if (middleware.length > 0) {
-    router.use('*', ...middleware);
+    router.use("*", ...middleware);
   }
 
   // 1. GET / (List with pagination)
   const listRoute = createRoute({
-    method: 'get',
-    path: '/',
+    method: "get",
+    path: "/",
     tags: [label],
     request: { query: paginationSchema },
     responses: {
       200: {
         description: `List of ${label}`,
         ...(listResponseSchema
-          ? { content: { 'application/json': { schema: listResponseSchema } } }
+          ? { content: { "application/json": { schema: listResponseSchema } } }
           : {}),
       },
     },
   });
 
   router.openapi(listRoute, async (c) => {
-    const { page = 1, pageSize = 20 } = c.req.valid('query');
+    const { page = 1, pageSize = 20 } = c.req.valid("query");
     const offset = (page - 1) * pageSize;
 
     const [items, [{ count }]] = await Promise.all([
-      db.select().from(table as any).limit(pageSize).offset(offset),
+      db
+        .select()
+        .from(table as any)
+        .limit(pageSize)
+        .offset(offset),
       db.select({ count: sql<number>`count(*)` }).from(table as any),
     ]);
 
@@ -90,23 +94,27 @@ export function autoCrud<TTable extends PgTable>(options: CrudOptions<TTable>) {
 
   // 2. GET /{id} (Detail)
   const getRoute = createRoute({
-    method: 'get',
-    path: '/{id}',
+    method: "get",
+    path: "/{id}",
     tags: [label],
     request: { params: idParamSchema },
     responses: {
       200: {
         description: `${label} details`,
         ...(itemResponseSchema
-          ? { content: { 'application/json': { schema: itemResponseSchema } } }
+          ? { content: { "application/json": { schema: itemResponseSchema } } }
           : {}),
       },
     },
   });
 
   router.openapi(getRoute, async (c) => {
-    const { id } = c.req.valid('param');
-    const [item] = await db.select().from(table as any).where(eq(idColumn, id)).limit(1);
+    const { id } = c.req.valid("param");
+    const [item] = await db
+      .select()
+      .from(table as any)
+      .where(eq(idColumn, id))
+      .limit(1);
     if (!item) throw notFound(`${label} not found`);
     return c.json({ data: item });
   });
@@ -114,23 +122,33 @@ export function autoCrud<TTable extends PgTable>(options: CrudOptions<TTable>) {
   // 3. POST / (Create)
   if (createSchema) {
     const createRouteConfig = createRoute({
-      method: 'post',
-      path: '/',
+      method: "post",
+      path: "/",
       tags: [label],
-      request: { body: { content: { 'application/json': { schema: createSchema } } } },
+      request: {
+        headers: z.object({
+          "x-csrf-token": z.string().min(1),
+        }),
+        body: { content: { "application/json": { schema: createSchema } } },
+      },
       responses: {
         201: {
           description: `${label} created`,
           ...(itemResponseSchema
-            ? { content: { 'application/json': { schema: itemResponseSchema } } }
+            ? {
+                content: { "application/json": { schema: itemResponseSchema } },
+              }
             : {}),
         },
       },
     });
 
     router.openapi(createRouteConfig, async (c) => {
-      const body = c.req.valid('json');
-      const [created] = await db.insert(table).values(body as any).returning();
+      const body = c.req.valid("json");
+      const [created] = await db
+        .insert(table)
+        .values(body as any)
+        .returning();
       return c.json({ data: created }, 201);
     });
   }
@@ -138,26 +156,28 @@ export function autoCrud<TTable extends PgTable>(options: CrudOptions<TTable>) {
   // 4. PATCH /{id} (Update)
   if (updateSchema) {
     const updateRouteConfig = createRoute({
-      method: 'patch',
-      path: '/{id}',
+      method: "patch",
+      path: "/{id}",
       tags: [label],
       request: {
         params: idParamSchema,
-        body: { content: { 'application/json': { schema: updateSchema } } },
+        body: { content: { "application/json": { schema: updateSchema } } },
       },
       responses: {
         200: {
           description: `${label} updated`,
           ...(itemResponseSchema
-            ? { content: { 'application/json': { schema: itemResponseSchema } } }
+            ? {
+                content: { "application/json": { schema: itemResponseSchema } },
+              }
             : {}),
         },
       },
     });
 
     router.openapi(updateRouteConfig, async (c) => {
-      const { id } = c.req.valid('param');
-      const body = c.req.valid('json');
+      const { id } = c.req.valid("param");
+      const body = c.req.valid("json");
       const [updated] = await db
         .update(table)
         .set(body as any)
@@ -171,16 +191,19 @@ export function autoCrud<TTable extends PgTable>(options: CrudOptions<TTable>) {
 
   // 5. DELETE /{id} (Delete)
   const deleteRouteConfig = createRoute({
-    method: 'delete',
-    path: '/{id}',
+    method: "delete",
+    path: "/{id}",
     tags: [label],
     request: { params: idParamSchema },
     responses: { 204: { description: `${label} deleted` } },
   });
 
   router.openapi(deleteRouteConfig, async (c) => {
-    const { id } = c.req.valid('param');
-    const [deleted] = await db.delete(table).where(eq(idColumn, id)).returning();
+    const { id } = c.req.valid("param");
+    const [deleted] = await db
+      .delete(table)
+      .where(eq(idColumn, id))
+      .returning();
     if (!deleted) throw notFound(`${label} not found`);
     return c.body(null, 204);
   });

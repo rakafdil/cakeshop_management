@@ -6,7 +6,7 @@ import { unimplemented } from '../../lib/errors';
 import { authenticate, type AppEnv } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import { getCookie } from 'hono/cookie';
-import { loginService, logoutService } from './services';
+import { loginService, logoutService } from './auth.service';
 
 // Modul auth: login (rate-limit ketat), logout, dan identitas user saat ini.
 

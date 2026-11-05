@@ -1,12 +1,12 @@
-import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   CreateOrderWithCustomerInputSchema,
   idParamSchema,
   paginationSchema,
-} from '@bakery/shared-schemas';
+} from "@bakery/shared-schemas";
 
-import { unimplemented } from '../../lib/errors';
-import { authenticate, type AppEnv } from '../../middleware/auth';
+import { unimplemented } from "../../lib/errors";
+import { authenticate, type AppEnv } from "../../middleware/auth";
 
 import {
   createOrderWithItems,
@@ -16,7 +16,7 @@ import {
   listOrders,
   recordOrderPayment,
   updateOrderStatus,
-} from './order.service';
+} from "./index";
 
 // --------------------------------------------------
 // Schemas
@@ -32,25 +32,25 @@ const listOrderQuerySchema = z.object({
 
 const updateOrderStatusSchema = z.object({
   status: z.enum([
-    'received',
-    'confirmed',
-    'requires_review',
-    'in_production',
-    'ready',
-    'out_for_delivery',
-    'completed',
-    'cancelled_no_response',
-    'cancelled_other',
+    "received",
+    "confirmed",
+    "requires_review",
+    "in_production",
+    "ready",
+    "out_for_delivery",
+    "completed",
+    "cancelled_no_response",
+    "cancelled_other",
   ]),
 });
 
 const paymentBodySchema = z.object({
   amount: z.number().positive({
-    message: 'Amount harus lebih dari 0',
+    message: "Amount harus lebih dari 0",
   }),
   paymentMethod: z.string().min(1),
   proofUrl: z.string().optional(),
-  status: z.enum(['pending', 'verified', 'rejected']).optional(),
+  status: z.enum(["pending", "verified", "rejected"]).optional(),
 });
 
 // Placeholder response schemas.
@@ -63,13 +63,13 @@ const errorResponseSchema = z.object({
   error: z.string(),
 });
 
-const orderTags = ['Orders'];
-const paymentTags = ['Order Payments'];
-const historyTags = ['Order Status History'];
-const itemTags = ['Order Items'];
-const reviewTags = ['Order Reviews'];
-const reminderTags = ['Order Reminders'];
-const slotTags = ['Order Production Slots'];
+const orderTags = ["Orders"];
+const paymentTags = ["Order Payments"];
+const historyTags = ["Order Status History"];
+const itemTags = ["Order Items"];
+const reviewTags = ["Order Reviews"];
+const reminderTags = ["Order Reminders"];
+const slotTags = ["Order Production Slots"];
 
 // --------------------------------------------------
 // Core order routes
@@ -77,18 +77,21 @@ const slotTags = ['Order Production Slots'];
 
 export const orderRoutes = new OpenAPIHono<AppEnv>();
 
-orderRoutes.use('*', authenticate);
+orderRoutes.use("*", authenticate);
 
 const createOrderRoute = createRoute({
-  method: 'post',
-  path: '/',
+  method: "post",
+  path: "/",
   tags: orderTags,
-  summary: 'Create an order',
-  description: 'Membuat pesanan beserta data customer dan item.',
+  summary: "Create an order",
+  description: "Membuat pesanan beserta data customer dan item.",
   request: {
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     body: {
       content: {
-        'application/json': {
+        "application/json": {
           schema: CreateOrderWithCustomerInputSchema,
         },
       },
@@ -96,9 +99,9 @@ const createOrderRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'Order berhasil dibuat',
+      description: "Order berhasil dibuat",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
@@ -107,8 +110,8 @@ const createOrderRoute = createRoute({
 });
 
 orderRoutes.openapi(createOrderRoute, async (c) => {
-  const body = c.req.valid('json');
-  const userId = c.get('account')?.id ?? c.get('user')?.sub;
+  const body = c.req.valid("json");
+  const userId = c.get("account")?.id ?? c.get("user")?.sub;
 
   const createdOrder = await createOrderWithItems(body, userId);
 
@@ -116,19 +119,19 @@ orderRoutes.openapi(createOrderRoute, async (c) => {
 });
 
 const listOrdersRoute = createRoute({
-  method: 'get',
-  path: '/',
+  method: "get",
+  path: "/",
   tags: orderTags,
-  summary: 'List orders',
-  description: 'Mengambil daftar pesanan dengan filter dan pagination.',
+  summary: "List orders",
+  description: "Mengambil daftar pesanan dengan filter dan pagination.",
   request: {
     query: listOrderQuerySchema,
   },
   responses: {
     200: {
-      description: 'Daftar order berhasil diambil',
+      description: "Daftar order berhasil diambil",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
@@ -137,25 +140,25 @@ const listOrdersRoute = createRoute({
 });
 
 orderRoutes.openapi(listOrdersRoute, async (c) => {
-  const query = c.req.valid('query');
+  const query = c.req.valid("query");
   const result = await listOrders(query);
 
   return c.json(result, 200);
 });
 
 const getOrderRoute = createRoute({
-  method: 'get',
-  path: '/{id}',
+  method: "get",
+  path: "/{id}",
   tags: orderTags,
-  summary: 'Get order by ID',
+  summary: "Get order by ID",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Detail order berhasil diambil',
+      description: "Detail order berhasil diambil",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
@@ -164,22 +167,25 @@ const getOrderRoute = createRoute({
 });
 
 orderRoutes.openapi(getOrderRoute, async (c) => {
-  const { id } = c.req.valid('param');
+  const { id } = c.req.valid("param");
   const order = await getOrderById(id);
 
   return c.json({ data: order }, 200);
 });
 
 const updateOrderStatusRoute = createRoute({
-  method: 'patch',
-  path: '/{id}/status',
+  method: "patch",
+  path: "/{id}/status",
   tags: orderTags,
-  summary: 'Update order status',
+  summary: "Update order status",
   request: {
     params: idParamSchema,
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     body: {
       content: {
-        'application/json': {
+        "application/json": {
           schema: updateOrderStatusSchema,
         },
       },
@@ -187,9 +193,9 @@ const updateOrderStatusRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Status order berhasil diperbarui',
+      description: "Status order berhasil diperbarui",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
@@ -198,9 +204,9 @@ const updateOrderStatusRoute = createRoute({
 });
 
 orderRoutes.openapi(updateOrderStatusRoute, async (c) => {
-  const { id } = c.req.valid('param');
-  const { status } = c.req.valid('json');
-  const userId = c.get('account')?.id ?? c.get('user')?.sub;
+  const { id } = c.req.valid("param");
+  const { status } = c.req.valid("json");
+  const userId = c.get("account")?.id ?? c.get("user")?.sub;
 
   const updated = await updateOrderStatus(id, status, userId);
 
@@ -213,21 +219,21 @@ orderRoutes.openapi(updateOrderStatusRoute, async (c) => {
 
 export const orderStatusHistoryRoutes = new OpenAPIHono<AppEnv>();
 
-orderStatusHistoryRoutes.use('*', authenticate);
+orderStatusHistoryRoutes.use("*", authenticate);
 
 const getOrderStatusHistoryRoute = createRoute({
-  method: 'get',
-  path: '/{id}/status-history',
+  method: "get",
+  path: "/{id}/status-history",
   tags: historyTags,
-  summary: 'Get order status history',
+  summary: "Get order status history",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Riwayat status order berhasil diambil',
+      description: "Riwayat status order berhasil diambil",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
@@ -235,15 +241,12 @@ const getOrderStatusHistoryRoute = createRoute({
   },
 });
 
-orderStatusHistoryRoutes.openapi(
-  getOrderStatusHistoryRoute,
-  async (c) => {
-    const { id } = c.req.valid('param');
-    const history = await getOrderStatusHistory(id);
+orderStatusHistoryRoutes.openapi(getOrderStatusHistoryRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const history = await getOrderStatusHistory(id);
 
-    return c.json({ data: history }, 200);
-  },
-);
+  return c.json({ data: history }, 200);
+});
 
 // --------------------------------------------------
 // Order items
@@ -251,30 +254,30 @@ orderStatusHistoryRoutes.openapi(
 
 export const orderItemRoutes = new OpenAPIHono<AppEnv>();
 
-orderItemRoutes.use('*', authenticate);
+orderItemRoutes.use("*", authenticate);
 
 const getOrderItemsRoute = createRoute({
-  method: 'get',
-  path: '/{id}/items',
+  method: "get",
+  path: "/{id}/items",
   tags: itemTags,
-  summary: 'List order items',
+  summary: "List order items",
   request: {
     params: idParamSchema,
     query: paginationSchema,
   },
   responses: {
     200: {
-      description: 'Daftar item order',
+      description: "Daftar item order",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -283,30 +286,33 @@ const getOrderItemsRoute = createRoute({
 });
 
 orderItemRoutes.openapi(getOrderItemsRoute, (c) =>
-  unimplemented('order items belum diimplementasikan'),
+  unimplemented("order items belum diimplementasikan"),
 );
 
 const addOrderItemRoute = createRoute({
-  method: 'post',
-  path: '/{id}/items',
+  method: "post",
+  path: "/{id}/items",
   tags: itemTags,
-  summary: 'Add order item',
+  summary: "Add order item",
   request: {
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     params: idParamSchema,
   },
   responses: {
     201: {
-      description: 'Item order berhasil ditambahkan',
+      description: "Item order berhasil ditambahkan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -315,7 +321,7 @@ const addOrderItemRoute = createRoute({
 });
 
 orderItemRoutes.openapi(addOrderItemRoute, (c) =>
-  unimplemented('add order item belum diimplementasikan'),
+  unimplemented("add order item belum diimplementasikan"),
 );
 
 // --------------------------------------------------
@@ -324,29 +330,29 @@ orderItemRoutes.openapi(addOrderItemRoute, (c) =>
 
 export const orderReviewRoutes = new OpenAPIHono<AppEnv>();
 
-orderReviewRoutes.use('*', authenticate);
+orderReviewRoutes.use("*", authenticate);
 
 const getOrderReviewsRoute = createRoute({
-  method: 'get',
-  path: '/{id}/reviews',
+  method: "get",
+  path: "/{id}/reviews",
   tags: reviewTags,
-  summary: 'List order reviews',
+  summary: "List order reviews",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Daftar review order',
+      description: "Daftar review order",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -355,30 +361,33 @@ const getOrderReviewsRoute = createRoute({
 });
 
 orderReviewRoutes.openapi(getOrderReviewsRoute, (c) =>
-  unimplemented('order reviews belum diimplementasikan'),
+  unimplemented("order reviews belum diimplementasikan"),
 );
 
 const createOrderReviewRoute = createRoute({
-  method: 'post',
-  path: '/{id}/reviews',
+  method: "post",
+  path: "/{id}/reviews",
   tags: reviewTags,
-  summary: 'Create order review',
+  summary: "Create order review",
   request: {
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     params: idParamSchema,
   },
   responses: {
     201: {
-      description: 'Review berhasil dibuat',
+      description: "Review berhasil dibuat",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -387,7 +396,7 @@ const createOrderReviewRoute = createRoute({
 });
 
 orderReviewRoutes.openapi(createOrderReviewRoute, (c) =>
-  unimplemented('create order review belum diimplementasikan'),
+  unimplemented("create order review belum diimplementasikan"),
 );
 
 // --------------------------------------------------
@@ -396,29 +405,29 @@ orderReviewRoutes.openapi(createOrderReviewRoute, (c) =>
 
 export const orderReminderRoutes = new OpenAPIHono<AppEnv>();
 
-orderReminderRoutes.use('*', authenticate);
+orderReminderRoutes.use("*", authenticate);
 
 const getOrderRemindersRoute = createRoute({
-  method: 'get',
-  path: '/{id}/reminders',
+  method: "get",
+  path: "/{id}/reminders",
   tags: reminderTags,
-  summary: 'List order reminders',
+  summary: "List order reminders",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Daftar reminder order',
+      description: "Daftar reminder order",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -427,30 +436,33 @@ const getOrderRemindersRoute = createRoute({
 });
 
 orderReminderRoutes.openapi(getOrderRemindersRoute, (c) =>
-  unimplemented('order reminders belum diimplementasikan'),
+  unimplemented("order reminders belum diimplementasikan"),
 );
 
 const createOrderReminderRoute = createRoute({
-  method: 'post',
-  path: '/{id}/reminders',
+  method: "post",
+  path: "/{id}/reminders",
   tags: reminderTags,
-  summary: 'Schedule order reminder',
+  summary: "Schedule order reminder",
   request: {
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     params: idParamSchema,
   },
   responses: {
     201: {
-      description: 'Reminder berhasil dijadwalkan',
+      description: "Reminder berhasil dijadwalkan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -459,7 +471,7 @@ const createOrderReminderRoute = createRoute({
 });
 
 orderReminderRoutes.openapi(createOrderReminderRoute, (c) =>
-  unimplemented('schedule order reminder belum diimplementasikan'),
+  unimplemented("schedule order reminder belum diimplementasikan"),
 );
 
 // --------------------------------------------------
@@ -468,21 +480,21 @@ orderReminderRoutes.openapi(createOrderReminderRoute, (c) =>
 
 export const orderPaymentRoutes = new OpenAPIHono<AppEnv>();
 
-orderPaymentRoutes.use('*', authenticate);
+orderPaymentRoutes.use("*", authenticate);
 
 const getOrderPaymentsRoute = createRoute({
-  method: 'get',
-  path: '/{id}/payments',
+  method: "get",
+  path: "/{id}/payments",
   tags: paymentTags,
-  summary: 'Get order payment summary',
+  summary: "Get order payment summary",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Ringkasan pembayaran order',
+      description: "Ringkasan pembayaran order",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
@@ -491,22 +503,25 @@ const getOrderPaymentsRoute = createRoute({
 });
 
 orderPaymentRoutes.openapi(getOrderPaymentsRoute, async (c) => {
-  const { id } = c.req.valid('param');
+  const { id } = c.req.valid("param");
   const result = await getOrderPaymentsSummary(id);
 
   return c.json(result, 200);
 });
 
 const createOrderPaymentRoute = createRoute({
-  method: 'post',
-  path: '/{id}/payments',
+  method: "post",
+  path: "/{id}/payments",
   tags: paymentTags,
-  summary: 'Record order payment',
+  summary: "Record order payment",
   request: {
     params: idParamSchema,
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     body: {
       content: {
-        'application/json': {
+        "application/json": {
           schema: paymentBodySchema,
         },
       },
@@ -514,9 +529,9 @@ const createOrderPaymentRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'Pembayaran berhasil dicatat',
+      description: "Pembayaran berhasil dicatat",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
@@ -525,8 +540,8 @@ const createOrderPaymentRoute = createRoute({
 });
 
 orderPaymentRoutes.openapi(createOrderPaymentRoute, async (c) => {
-  const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
+  const { id } = c.req.valid("param");
+  const body = c.req.valid("json");
 
   const newPayment = await recordOrderPayment(id, body);
 
@@ -539,29 +554,29 @@ orderPaymentRoutes.openapi(createOrderPaymentRoute, async (c) => {
 
 export const orderProductionSlotRoutes = new OpenAPIHono<AppEnv>();
 
-orderProductionSlotRoutes.use('*', authenticate);
+orderProductionSlotRoutes.use("*", authenticate);
 
 const getOrderProductionSlotsRoute = createRoute({
-  method: 'get',
-  path: '/{id}/production-slots',
+  method: "get",
+  path: "/{id}/production-slots",
   tags: slotTags,
-  summary: 'Get order production slots',
+  summary: "Get order production slots",
   request: {
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Daftar slot produksi order',
+      description: "Daftar slot produksi order",
       content: {
-        'application/json': {
+        "application/json": {
           schema: z.unknown(),
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -570,30 +585,33 @@ const getOrderProductionSlotsRoute = createRoute({
 });
 
 orderProductionSlotRoutes.openapi(getOrderProductionSlotsRoute, (c) =>
-  unimplemented('order production slots belum diimplementasikan'),
+  unimplemented("order production slots belum diimplementasikan"),
 );
 
 const reserveOrderProductionSlotsRoute = createRoute({
-  method: 'put',
-  path: '/{id}/production-slots',
+  method: "put",
+  path: "/{id}/production-slots",
   tags: slotTags,
-  summary: 'Reserve order production slots',
+  summary: "Reserve order production slots",
   request: {
+    headers: z.object({
+      "x-csrf-token": z.string().min(1),
+    }),
     params: idParamSchema,
   },
   responses: {
     200: {
-      description: 'Slot produksi berhasil diperbarui',
+      description: "Slot produksi berhasil diperbarui",
       content: {
-        'application/json': {
+        "application/json": {
           schema: dataResponseSchema,
         },
       },
     },
     501: {
-      description: 'Fitur belum diimplementasikan',
+      description: "Fitur belum diimplementasikan",
       content: {
-        'application/json': {
+        "application/json": {
           schema: errorResponseSchema,
         },
       },
@@ -601,7 +619,6 @@ const reserveOrderProductionSlotsRoute = createRoute({
   },
 });
 
-orderProductionSlotRoutes.openapi(
-  reserveOrderProductionSlotsRoute,
-  (c) => unimplemented('reserve order production slots belum diimplementasikan'),
+orderProductionSlotRoutes.openapi(reserveOrderProductionSlotsRoute, (c) =>
+  unimplemented("reserve order production slots belum diimplementasikan"),
 );

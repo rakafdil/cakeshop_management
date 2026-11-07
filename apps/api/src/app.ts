@@ -22,7 +22,7 @@ import {
   uomRoutes,
   toolRoutes,
   laborRateRoutes,
-} from "./modules/catalog/routes";
+} from "./modules/catalog/catalog.routes";
 import {
   productionRoutes,
   productionSlotRoutes,

@@ -1,0 +1,3 @@
+- Data layer is a client-side dummy store (`src/lib/db/*`, localStorage) whose types mirror the upstream repo's `Cakeshop Management.sql`; business rules live as pure functions in `src/lib/db/logic.ts` with tests — so the UI can later be swapped onto the real API without touching rules.
+- Auth is a dummy login (seeded admin/staff users); `AppShell` gates pages client-side and `adminOnly` hides owner-only pages.
+- The business calendar derives operational events from the existing dummy tables; optional `calendarActivity` holds standalone plans separately so scheduling or completing a plan never silently changes stock. Content plans reuse the content table and its owner-only access.

@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { desc, eq } from "drizzle-orm";
+import { db } from "@bakery/database";
 import {
   CreateIngredientPriceHistoryInputSchema,
   CreateIngredientSchema,
@@ -35,6 +37,7 @@ import { zValid } from "../../lib/validators";
 import { authenticate, type AppEnv } from "../../middleware/auth";
 import {
   ingredient,
+  ingredientPriceHistory,
   laborRate,
   productCategory,
   recipe,
@@ -153,13 +156,42 @@ ingredientPriceHistoryRoutes.get(
   "/:id/price-history",
   zValid("param", idParamSchema),
   zValid("query", IngredientPriceHistoryQuerySchema),
-  (c) => unimplemented("ingredient price history belum diimplementasikan"),
+  async (c) => {
+    const id = c.req.param("id");
+    const page = Number(c.req.query("page") ?? 1);
+    const pageSize = Number(c.req.query("pageSize") ?? 20);
+    const rows = await db
+      .select()
+      .from(ingredientPriceHistory)
+      .where(eq(ingredientPriceHistory.ingredientId, id))
+      .orderBy(desc(ingredientPriceHistory.changedAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return c.json({
+      data: rows,
+      pagination: { page, limit: pageSize, total: rows.length },
+    });
+  },
 );
 ingredientPriceHistoryRoutes.post(
   "/:id/price-history",
   zValid("param", idParamSchema),
   zValid("json", CreateIngredientPriceHistoryInputSchema),
-  (c) => unimplemented("record ingredient price belum diimplementasikan"),
+  async (c) => {
+    const id = c.req.param("id");
+    const { price } = await c.req.json<{ price: string }>();
+    const [previous] = await db
+      .select({ price: ingredientPriceHistory.price })
+      .from(ingredientPriceHistory)
+      .where(eq(ingredientPriceHistory.ingredientId, id))
+      .orderBy(desc(ingredientPriceHistory.changedAt))
+      .limit(1);
+    const [created] = await db
+      .insert(ingredientPriceHistory)
+      .values({ ingredientId: id, price, previousPrice: previous?.price ?? null })
+      .returning();
+    return c.json({ data: created }, 201);
+  },
 );
 
 // child relation resep: bahan, alat, gambar (belum ada route di app.ts)

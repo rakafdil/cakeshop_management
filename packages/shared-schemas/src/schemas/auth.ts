@@ -5,11 +5,6 @@ import { z } from 'zod';
 export const loginSchema = z.object({
   email: z.string().trim().email('Email tidak valid'),
   password: z.string().min(1, 'Password wajib diisi'),
-}).openapi({
-  example: {
-    email: "admin@cakeshop.local",
-    password: "admin1234"
-  }
 });
 
 export type LoginDto = z.infer<typeof loginSchema>;

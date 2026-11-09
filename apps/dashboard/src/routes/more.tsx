@@ -34,7 +34,20 @@ function More() {
             <Card className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent font-display text-lg font-semibold text-accent-foreground">{user.name.charAt(0)}</div>
               <div className="flex-1"><p className="font-semibold">{user.name}</p><p className="text-xs text-muted-foreground">{user.email} · {isAdmin ? "Pemilik" : "Pegawai"}</p></div>
-              <button onClick={() => { logout(); nav({ to: "/login", replace: true }); }} className="rounded-full border p-2.5" aria-label="Keluar"><LogOut className="h-4 w-4" /></button>
+              <button
+                onClick={async () => {
+                  try {
+                    await logout();
+                    nav({ to: "/login", replace: true });
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Gagal keluar");
+                  }
+                }}
+                className="rounded-full border p-2.5"
+                aria-label="Keluar"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </Card>
 
             <Link to="/calendar" className="mt-4 flex items-center gap-3 rounded-lg border p-4"><CalendarDays className="h-5 w-5 text-accent" /><span className="flex-1 font-semibold">Kalender bisnis</span><ChevronRight className="h-4 w-4" /></Link>

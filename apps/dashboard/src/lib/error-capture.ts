@@ -31,6 +31,25 @@ export function describeError(error: unknown): string {
   return parts.join("\n").slice(0, DESCRIPTION_LENGTH_LIMIT);
 }
 
+export function isAbortError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < CAUSE_DEPTH_LIMIT && current != null; depth++) {
+    if (current instanceof Error) {
+      if (
+        current.name === "AbortError" ||
+        (current as Error & { code?: unknown }).code === "ECONNRESET" ||
+        current.message.toLowerCase() === "aborted"
+      ) {
+        return true;
+      }
+      current = current.cause;
+    } else {
+      return false;
+    }
+  }
+  return false;
+}
+
 function describeStatus(error: Error): string {
   const { status, statusCode } = error as { status?: unknown; statusCode?: unknown };
   const value = status ?? statusCode;
@@ -54,6 +73,7 @@ function isErrorLike(value: unknown): value is Error {
 // recorded for consumeLastCapturedError and expanded before serialization.
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
+  if (args.some(isAbortError)) return;
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);

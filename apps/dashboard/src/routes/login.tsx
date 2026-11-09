@@ -11,8 +11,8 @@ export const Route = createFileRoute("/login")({
 });
 
 const demo = [
-  { label: "Pemilik", email: "owner@cakeshop.id", password: "owner123", icon: Crown, desc: "Akses penuh: harga, HPP, keuangan" },
-  { label: "Pegawai", email: "staff@cakeshop.id", password: "staff123", icon: ChefHat, desc: "Resep, produksi, stok, pesanan" },
+  { label: "Admin", email: "admin@cakeshop.local", password: "admin1234", icon: Crown, desc: "Akses penuh: harga, HPP, keuangan" },
+  { label: "Pegawai", email: "staff@cakeshop.local", password: "staff1234", icon: ChefHat, desc: "Resep, produksi, stok, pesanan" },
 ];
 
 function Login() {
@@ -20,9 +20,9 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const submit = (e: string, p: string) => {
+  const submit = async (e: string, p: string) => {
     try {
-      const u = login(e, p);
+      const u = await login(e, p);
       toast.success(`Halo, ${u.name}`);
       nav({ to: "/", replace: true });
     } catch (err) {
@@ -55,7 +55,7 @@ function Login() {
           <Field label="Kata sandi"><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} placeholder="••••••" /></Field>
           <Button className="w-full py-3.5">Masuk</Button>
         </form>
-        <p className="mt-4 text-center text-xs text-muted-foreground">Demo: owner@cakeshop.id / owner123 · staff@cakeshop.id / staff123</p>
+        <p className="mt-4 text-center text-xs text-muted-foreground">Demo: admin@cakeshop.local / admin1234</p>
       </div>
     </div>
   );

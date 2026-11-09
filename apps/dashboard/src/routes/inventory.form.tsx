@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppShell, Button, Field, inputCls, meta } from "@/components/app-shell";
-import { applyStock, latestPrice, nowIso, uid } from "@/lib/db/logic";
-import { getDb, mutate, useDb } from "@/lib/db/store";
+import { ingredientsApi, uomsApi } from "@/lib/endpoints/ingredients";
+import { getDb, mutate } from "@/lib/db/store";
+import { latestPrice } from "@/lib/db/logic";
+import type { UomDto } from "@bakery/shared-schemas";
 
 export const Route = createFileRoute("/inventory/form")({
   validateSearch: (s: Record<string, unknown>): { id?: string } =>
@@ -14,63 +16,75 @@ export const Route = createFileRoute("/inventory/form")({
 
 function IngredientForm() {
   const { id } = Route.useSearch();
-  const db = useDb();
   const nav = useNavigate();
   const ex = id ? getDb().ingredient.find((i) => i.id === id) : undefined;
+  const [uoms, setUoms] = useState<UomDto[]>([]);
   const [name, setName] = useState(ex?.name ?? "");
-  const [uomId, setUomId] = useState(ex?.purchaseUomId ?? "kg");
+  const [uomId, setUomId] = useState(ex?.purchaseUomId ?? "");
   const [min, setMin] = useState(String(ex?.minimumStock ?? ""));
   const [stock, setStock] = useState("");
   const [price, setPrice] = useState(ex ? String(latestPrice(getDb(), ex.id)) : "");
   const [active, setActive] = useState(ex?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  useEffect(() => {
+    uomsApi.list()
+      .then((response) => {
+        setUoms(response.data);
+        if (!uomId && response.data[0]) setUomId(response.data[0].id);
+      })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Gagal memuat satuan"));
+  }, []);
+
+  const save = async () => {
     if (!name.trim()) {
       toast.error("Nama wajib diisi");
       return;
     }
-    const rid = mutate((d) => {
-      if (ex) {
-        const i = d.ingredient.find((x) => x.id === ex.id)!;
-        Object.assign(i, {
-          name: name.trim(),
-          purchaseUomId: uomId,
-          minimumStock: Number(min) || 0,
-          isActive: active,
-        });
-        const prev = latestPrice(d, ex.id);
-        if (price && Number(price) !== prev)
-          d.ingredientPriceHistory.push({
-            id: uid("ph"),
-            ingredientId: ex.id,
-            price: Number(price),
-            previousPrice: prev,
-            changedAt: nowIso(),
+    if (!uomId) {
+      toast.error("Satuan beli wajib dipilih");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = ex
+        ? await ingredientsApi.update(ex.id, {
+            name: name.trim(),
+            purchaseUomId: uomId,
+            minimumStock: min || "0",
+            isActive: active,
+          })
+        : await ingredientsApi.create({
+            name: name.trim(),
+            purchaseUomId: uomId,
+            currentStock: stock || "0",
+            minimumStock: min || "0",
+            isActive: true,
           });
-        return ex.id;
+      mutate((db) => {
+        const ingredient = {
+          id: response.id,
+          name: response.name,
+          purchaseUomId: response.purchaseUomId,
+          currentStock: Number(response.currentStock),
+          minimumStock: Number(response.minimumStock),
+          isActive: response.isActive,
+          createdAt: String(response.createdAt),
+        };
+        const index = db.ingredient.findIndex((item) => item.id === response.id);
+        if (index >= 0) db.ingredient[index] = ingredient;
+        else db.ingredient.push(ingredient);
+      });
+      if (price.trim()) {
+        await ingredientsApi.addPrice(response.id, { price: price.trim() });
       }
-      const nid = uid("i");
-      d.ingredient.push({
-        id: nid,
-        name: name.trim(),
-        purchaseUomId: uomId,
-        currentStock: 0,
-        minimumStock: Number(min) || 0,
-        isActive: true,
-        createdAt: nowIso(),
-      });
-      d.ingredientPriceHistory.push({
-        id: uid("ph"),
-        ingredientId: nid,
-        price: Number(price) || 0,
-        previousPrice: null,
-        changedAt: nowIso(),
-      });
-      if (Number(stock) > 0) applyStock(d, nid, "in", Number(stock));
-      return nid;
-    });
-    toast.success("Bahan disimpan");
-    nav({ to: "/inventory/$id", params: { id: rid }, replace: true });
+      toast.success("Bahan disimpan");
+      nav({ to: "/inventory/$id", params: { id: response.id }, replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bahan gagal disimpan");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -79,8 +93,8 @@ function IngredientForm() {
       adminOnly
       title={ex ? "Edit bahan" : "Bahan baru"}
       bottomBar={
-        <Button className="w-full py-4" onClick={save}>
-          Simpan
+        <Button className="w-full py-4" onClick={save} disabled={saving}>
+          {saving ? "Menyimpan..." : "Simpan"}
         </Button>
       }
     >
@@ -96,7 +110,7 @@ function IngredientForm() {
           </Field>
           <Field label="Satuan beli">
             <select value={uomId} onChange={(e) => setUomId(e.target.value)} className={inputCls}>
-              {db.uom.map((u) => (
+              {uoms.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} ({u.symbol})
                 </option>
@@ -123,7 +137,7 @@ function IngredientForm() {
             </Field>
           </div>
           {!ex && (
-            <Field label="Stok awal" hint="Tercatat sebagai mutasi stok masuk.">
+            <Field label="Stok awal" hint="Disimpan sebagai stok awal bahan.">
               <input
                 type="number"
                 step="any"

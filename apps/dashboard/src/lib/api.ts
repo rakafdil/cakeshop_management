@@ -11,12 +11,38 @@ export class ApiError extends Error {
   }
 }
 
+let csrfToken =
+  typeof window !== "undefined" ? window.sessionStorage.getItem("ck_csrf") ?? undefined : undefined;
+
+export function setCsrfToken(token: string | undefined) {
+  csrfToken = token;
+  if (typeof window === "undefined") return;
+  if (token) window.sessionStorage.setItem("ck_csrf", token);
+  else window.sessionStorage.removeItem("ck_csrf");
+}
+
 export const http = axios.create({
   baseURL: import.meta.env["VITE_API_URL"] ?? "/api",
   withCredentials: true,
   timeout: 15_000,
-  xsrfCookieName: "csrf_token", // sesuaikan nama cookie backend
+  xsrfCookieName: "ck_csrf",
   xsrfHeaderName: "x-csrf-token",
+});
+
+http.interceptors.request.use((config) => {
+  if (
+    typeof window !== "undefined" &&
+    config.method &&
+    !["get", "head", "options"].includes(config.method.toLowerCase())
+  ) {
+    const cookieToken = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("ck_csrf="))
+      ?.slice("ck_csrf=".length);
+    const token = csrfToken ?? cookieToken;
+    if (token) config.headers.set("x-csrf-token", decodeURIComponent(token));
+  }
+  return config;
 });
 
 http.interceptors.response.use(
@@ -54,12 +80,3 @@ export const api = {
   delete: <T>(url: string, config?: AxiosRequestConfig) =>
     http.delete<T>(url, config).then((r) => r.data),
 };
-
-if (typeof window === "undefined") {
-  http.interceptors.request.use(async (config) => {
-    const { getRequestHeaders } = await import("@tanstack/react-start/server");
-    const cookie = getRequestHeaders().get("cookie");
-    if (cookie) config.headers.set("cookie", cookie);
-    return config;
-  });
-}

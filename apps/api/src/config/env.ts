@@ -17,7 +17,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16).default('dev-only-secret-change-in-production'),
   JWT_EXPIRES_IN_DAYS: z.coerce.number().default(7),
   COOKIE_SECURE: boolFromString,
-  CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:3000,http://localhost:8080'),
 
   // Rate limit
   RATE_LIMIT_MAX: z.coerce.number().default(300),

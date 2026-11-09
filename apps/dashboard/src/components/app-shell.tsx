@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { useCurrentUser, useHydrated } from "@/lib/db/store";
+import { refreshCatalog, useCurrentUser, useHydrated } from "@/lib/db/store";
 import type { User } from "@/lib/db/types";
 import { Button as NavigationButton } from "@/components/ui/button";
 
@@ -52,6 +52,13 @@ export function AppShell({
   useEffect(() => {
     if (hydrated && !user) navigate({ to: "/login", replace: true });
   }, [hydrated, user, navigate]);
+
+  useEffect(() => {
+    if (!hydrated || !user) return;
+    refreshCatalog().catch((error) => {
+      console.error("Gagal memuat katalog dari API", error);
+    });
+  }, [hydrated, user?.id]);
 
   if (!hydrated || !user) {
     return (

@@ -444,6 +444,12 @@ export type IngredientPriceHistoryDto = z.infer<
 export type CreateIngredientPriceHistoryInput = z.infer<
   typeof CreateIngredientPriceHistoryInputSchema
 >;
+export type IngredientPriceHistoryResponse = z.infer<
+  typeof IngredientPriceHistoryResponseSchema
+>;
+export type IngredientPriceHistoryListResponse = z.infer<
+  typeof IngredientPriceHistoryListResponseSchema
+>;
 
 // UOM
 export type UomDto = z.infer<typeof UomSchema>;

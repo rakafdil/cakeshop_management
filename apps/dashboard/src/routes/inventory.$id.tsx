@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import {
   AppShell,
@@ -17,6 +18,8 @@ import {
 import { dateTimeFmt, qtyFmt, rupiah, stockTxLabel } from "@/lib/db/labels";
 import { applyStock, latestPrice, nowIso, uid } from "@/lib/db/logic";
 import { mutate, useDb } from "@/lib/db/store";
+import { ingredientsApi } from "@/lib/endpoints/ingredients";
+import type { IngredientPriceHistory } from "@/lib/db/types";
 import type { StockTransactionType } from "@/lib/db/types";
 
 export const Route = createFileRoute("/inventory/$id")({
@@ -40,6 +43,7 @@ function IngredientDetail() {
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [alsoExpense, setAlsoExpense] = useState(true);
+  const [apiPrices, setApiPrices] = useState<IngredientPriceHistory[]>([]);
   const ing = db.ingredient.find((i) => i.id === id);
   if (!ing)
     return (
@@ -54,6 +58,23 @@ function IngredientDetail() {
   const prices = db.ingredientPriceHistory
     .filter((p) => p.ingredientId === id)
     .sort((a, b) => b.changedAt.localeCompare(a.changedAt));
+  useEffect(() => {
+    ingredientsApi
+      .priceHistory(id, { pageSize: 100 })
+      .then((response) =>
+        setApiPrices(
+          response.data.map((item) => ({
+            id: item.id,
+            ingredientId: item.ingredientId,
+            price: Number(item.price),
+            previousPrice: item.previousPrice == null ? null : Number(item.previousPrice),
+            changedAt: item.changedAt.toISOString(),
+          })),
+        ),
+      )
+      .catch(() => undefined);
+  }, [id]);
+  const displayedPrices = apiPrices.length > 0 ? apiPrices : prices;
   const low = ing.currentStock < ing.minimumStock;
   const usedIn = db.recipeIngredient.filter((r) => r.ingredientId === id).length;
 
@@ -155,7 +176,7 @@ function IngredientDetail() {
               <>
                 <SectionTitle>Riwayat harga</SectionTitle>
                 <Card className="divide-y p-0">
-                  {prices.map((p) => (
+                  {displayedPrices.map((p) => (
                     <div key={p.id} className="flex items-center justify-between p-3.5 text-sm">
                       <span className="text-muted-foreground">{dateTimeFmt(p.changedAt)}</span>
                       <span>

@@ -15,6 +15,7 @@ export const ingredientsApi = {
       .then((r) => r.data),
   create: (body: CreateIngredientDto) =>
     http.post<IngredientResponse>("/ingredients", body).then((r) => r.data.data),
+  get: (id: string) => http.get<IngredientResponse>(`/ingredients/${id}`).then((r) => r.data.data),
   update: (id: string, body: UpdateIngredientDto) =>
     http.patch<IngredientResponse>(`/ingredients/${id}`, body).then((r) => r.data.data),
   remove: (id: string) => http.delete(`/ingredients/${id}`).then(() => undefined), // 204
